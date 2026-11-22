@@ -1,0 +1,157 @@
+version: 2
+
+# Testing approach:
+#   1. Grain test    : is each model's "one row = ?" definition unique?
+#   2. Not null      : key columns must not be empty.
+#   3. Relationships : FK -> PK (from the "many" side to the "one" side).
+#   4. Value tests   : values / ranges allowed by the GBFS specification.
+#
+# severity: warn -> known and accepted data conditions (explained below).
+
+models:
+
+  # ---------------------------------------------------------------- stations
+  - name: stg__station_information
+    description: "One row = one station (current list, loaded with replace)."
+    columns:
+      - name: station_id
+        data_tests:
+          - unique
+          - not_null
+      - name: station_name
+        data_tests:
+          - not_null
+      - name: capacity
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+
+  - name: stg__station_status
+    description: "One row = one snapshot of one station."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [station_id, snapshot_at]
+    columns:
+      - name: station_id
+        data_tests:
+          - not_null
+          # WARN: station_id 37006 appears in the first 3 snapshots but is not
+          # in the current station_information (station was removed).
+          - relationships:
+              arguments:
+                to: ref('stg__station_information')
+                field: station_id
+              config:
+                severity: warn
+      - name: snapshot_at
+        data_tests:
+          - not_null
+      - name: num_vehicles_available
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+      - name: num_docks_available
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+
+  # ---------------------------------------------------------------- vehicles
+  - name: stg__vehicle_status
+    description: "One row = one snapshot of one vehicle. vehicle_id rotates periodically in GBFS 3.0."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [vehicle_id, snapshot_at]
+    columns:
+      - name: vehicle_id
+        data_tests:
+          - not_null
+      - name: snapshot_at
+        data_tests:
+          - not_null
+      - name: station_id
+        data_tests:
+          # WARN: stations 21044, 37081, 37084 hold vehicles in every snapshot
+          # but are missing from station_information (depot / non-public location?).
+          - relationships:
+              arguments:
+                to: ref('stg__station_information')
+                field: station_id
+              config:
+                severity: warn
+      - name: vehicle_type_id
+        data_tests:
+          - not_null
+          # WARN: vehicle type 'ebike' exists in the field but not in the vehicle_types
+          # catalog (7 rows, all at 21044, battery 0%). Price/attributes of an
+          # uncatalogued type are unknown -> to be handled in the mart layer.
+          - relationships:
+              arguments:
+                to: ref('stg__vehicle_types')
+                field: vehicle_type_id
+              config:
+                severity: warn
+
+  - name: stg__vehicle_types
+    description: "One row = one vehicle type."
+    columns:
+      - name: vehicle_type_id
+        data_tests:
+          - unique
+          - not_null
+      - name: form_factor
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['bicycle', 'cargo_bicycle', 'car', 'moped', 'scooter_standing', 'scooter_seated', 'other']
+      - name: propulsion_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['human', 'electric_assist', 'electric', 'combustion', 'combustion_diesel', 'hybrid', 'plugin_hybrid', 'hydrogen_fuel_cell']
+      - name: default_pricing_plan_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg__system_pricing_plans')
+                field: plan_id
+
+  # ---------------------------------------------------------------- pricing
+  - name: stg__system_pricing_plans
+    description: "One row = one pricing plan."
+    columns:
+      - name: plan_id
+        data_tests:
+          - unique
+          - not_null
+      - name: price
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+
+  - name: stg__system_pricing_plans__per_min_pricing
+    description: "One row = one pricing segment of a plan."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [plan_id, segment_index]
+    columns:
+      - name: plan_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg__system_pricing_plans')
+                field: plan_id
+      - name: rate
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0

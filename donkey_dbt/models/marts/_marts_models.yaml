@@ -1,0 +1,96 @@
+version: 2
+
+models:
+
+  - name: fct__station_availability
+    description: >
+      One row = one snapshot of one station (same grain as stg__station_status).
+      Station attributes (name, capacity) come from station_information via LEFT JOIN;
+      unlisted stations are kept and flagged with is_listed_station = false.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [station_id, snapshot_at]
+    columns:
+      - name: station_id
+        description: "Station identifier. Always taken from station_status, so it is never NULL."
+        data_tests:
+          - not_null
+
+      - name: station_name
+        description: "Station name (nl). NULL for unlisted stations."
+
+      - name: snapshot_at
+        description: "Snapshot time (earliest fetched_at within the same dlt load)."
+        data_tests:
+          - not_null
+
+      - name: num_vehicles_available
+        description: "Number of vehicles available for rent."
+
+      - name: num_docks_available
+        description: "Number of free spots where a vehicle can be returned."
+
+      - name: capacity
+        description: "Total station capacity. NULL for unlisted stations."
+
+      - name: occupancy_percentage
+        description: >
+          Occupancy = num_vehicles_available / capacity * 100.
+          NULL when capacity is NULL or 0 (dbt_utils.safe_divide).
+          Can exceed 100: vehicles can be parked above capacity.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+          # WARN: station 26619 has capacity 17 and 18 vehicles -> 105.88%.
+          # Not an error, but we want to monitor it.
+          - dbt_utils.accepted_range:
+              arguments:
+                max_value: 100
+              config:
+                severity: warn
+
+      - name: is_listed_station
+        description: "Is the station in the current station_information list? (37006 was removed -> false)"
+        data_tests:
+          - not_null
+
+      - name: latitude
+        description: "Latitude (for the Looker Studio map). NULL for unlisted stations."
+
+      - name: longitude
+        description: "Longitude (for the Looker Studio map). NULL for unlisted stations."
+
+  - name: fct__fleet_snapshot
+    description: >
+      One row = a summary of the whole fleet in one snapshot.
+      Derived from stg__vehicle_status with group by snapshot_at.
+    columns:
+      - name: snapshot_at
+        description: "Snapshot time. Grain key."
+        data_tests:
+          - unique
+          - not_null
+
+      - name: total_vehicles
+        description: "Total number of vehicles in the feed."
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+
+      - name: available_vehicles
+        description: "Vehicles that are neither disabled nor reserved."
+
+      - name: disabled_vehicles
+        description: "Disabled vehicles. Currently always 0: Donkey may not publish disabled vehicles in the feed."
+
+      - name: reserved_vehicles
+        description: "Reserved vehicles. Currently always 0."
+
+      - name: vehicles_at_unlisted_stations
+        description: >
+          Vehicles at stations missing from station_information (depot / non-public).
+          Vehicles on the street ≈ total_vehicles - vehicles_at_unlisted_stations.

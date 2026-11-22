@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.ruff_cache/
+*.duckdb
+*.duckdb.wal
+logs/
+.dlt/secrets.toml
+gcp-key*.json
+.env
+.idea/
+scratch.py
+dlt_okuma_listesi.md
+

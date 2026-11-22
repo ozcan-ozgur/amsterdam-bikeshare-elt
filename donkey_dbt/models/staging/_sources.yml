@@ -1,0 +1,20 @@
+version: 2
+
+sources:
+  - name: donkey_raw
+    description: "Raw source for Donkey data"
+    schema: donkey_raw
+    tables:
+      - name: 'station_status'
+      - name: 'station_information'
+      - name: 'station_information__name'
+      - name: 'station_status__vehicle_types_available'
+      - name: 'system_pricing_plans'
+      - name: 'system_pricing_plans__description'
+      - name: 'system_pricing_plans__name'
+      - name: 'system_pricing_plans__per_min_pricing'
+      - name: 'vehicle_status'
+      - name: 'vehicle_types'
+      - name: 'vehicle_types__name'
+      - name: 'vehicle_types__pricing_plan_ids'
+
