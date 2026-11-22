@@ -1,0 +1,12 @@
+name: hello
+
+on: push
+
+jobs:
+  say-hello:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Hello CI"
+      - run: ls -ls
+      - run: python --version
