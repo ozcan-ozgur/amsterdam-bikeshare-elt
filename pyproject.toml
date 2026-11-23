@@ -7,7 +7,6 @@ dependencies = [
     "dbt-duckdb>=1.11.1",
     "dlt[bigquery,duckdb,parquet]>=1.32.0",
     "google-cloud-bigquery>=3.47.0",
-    "great-expectations>=1.25.0",
     "pandas>=3.1.1",
     "pyarrow>=26.0.1",
     "requests>=2.34.2",
@@ -16,6 +15,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "dlt[hub]>=1.32.0",
+    "great-expectations>=1.25.0",
     "ibis-framework>=12.0.0",
     "marimo>=0.25.2",
     "pyarrow>=26.0.1",

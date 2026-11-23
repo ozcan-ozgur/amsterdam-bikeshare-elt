@@ -1,0 +1,28 @@
+# Keep the build context small and secrets out of the image.
+
+# Version control, editors, CI
+.git/
+.github/
+.idea/
+
+# Python environments and caches
+.venv/
+__pycache__/
+*.pyc
+.ruff_cache/
+
+# Secrets and local credentials
+.dlt/secrets.toml
+.env
+gcp-key*.json
+
+# Local data
+*.duckdb
+*.duckdb.wal
+
+# dbt build artefacts (packages are installed inside the image)
+donkey_dbt/target/
+donkey_dbt/dbt_packages/
+donkey_dbt/logs/
+donkey_dbt/.user.yml
+logs/

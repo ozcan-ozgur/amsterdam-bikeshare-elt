@@ -2745,7 +2745,6 @@ dependencies = [
     { name = "dbt-duckdb" },
     { name = "dlt", extra = ["bigquery", "duckdb", "parquet"] },
     { name = "google-cloud-bigquery" },
-    { name = "great-expectations" },
     { name = "pandas" },
     { name = "pyarrow" },
     { name = "requests" },
@@ -2754,6 +2753,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "dlt", extra = ["hub"] },
+    { name = "great-expectations" },
     { name = "ibis-framework" },
     { name = "marimo" },
     { name = "pyarrow" },
@@ -2771,7 +2771,6 @@ requires-dist = [
     { name = "dbt-duckdb", specifier = ">=1.11.1" },
     { name = "dlt", extras = ["bigquery", "duckdb", "parquet"], specifier = ">=1.32.0" },
     { name = "google-cloud-bigquery", specifier = ">=3.47.0" },
-    { name = "great-expectations", specifier = ">=1.25.0" },
     { name = "pandas", specifier = ">=3.1.1" },
     { name = "pyarrow", specifier = ">=26.0.1" },
     { name = "requests", specifier = ">=2.34.2" },
@@ -2780,6 +2779,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "dlt", extras = ["hub"], specifier = ">=1.32.0" },
+    { name = "great-expectations", specifier = ">=1.25.0" },
     { name = "ibis-framework", specifier = ">=12.0.0" },
     { name = "marimo", specifier = ">=0.25.2" },
     { name = "pyarrow", specifier = ">=26.0.1" },
