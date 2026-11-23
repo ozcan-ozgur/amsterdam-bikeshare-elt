@@ -1,0 +1,41 @@
+name: elt
+
+on:
+  schedule:
+    - cron: "17 * * * *"      # every hour at :17 UTC (:00 is congested on GitHub)
+  workflow_dispatch:           # manual "Run workflow" button in the Actions tab
+
+concurrency:
+  group: elt                   # never run two ELT jobs at the same time
+  cancel-in-progress: false    # queue the new run instead of cancelling the running one
+
+jobs:
+  elt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DLT_DESTINATION: bigquery   # every step in this job writes to BigQuery
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.14"
+
+      - run: uv sync --frozen
+
+      # Writes the service account key from the secret to a file and sets
+      # GOOGLE_APPLICATION_CREDENTIALS, which dlt and dbt (method: oauth) both read.
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Extract & load (dlt -> BigQuery)
+        run: uv run python donkey_pipeline.py
+
+      - run: uv run dbt deps
+        working-directory: donkey_dbt
+
+      - name: Transform & test (dbt -> BigQuery)
+        run: uv run dbt build --target prod
+        working-directory: donkey_dbt

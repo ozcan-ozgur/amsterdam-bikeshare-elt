@@ -31,6 +31,10 @@ clean-targets:         # directories to be removed by `dbt clean`
 # files using the `{{ config(...) }}` macro.
 models:
   donkey_dbt:
+    # Write YAML descriptions into the warehouse (table + column descriptions)
+    +persist_docs:
+      relation: true
+      columns: true
     # Config indicated by + and applies to all files under models/staging/
     staging:
       +materialized: view
