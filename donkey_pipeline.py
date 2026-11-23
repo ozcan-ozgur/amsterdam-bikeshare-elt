@@ -1,3 +1,4 @@
+import os
 from datetime import UTC, datetime
 
 import dlt
@@ -72,7 +73,7 @@ config = {
 
 pipeline = dlt.pipeline(
     pipeline_name="donkey",
-    destination="duckdb",
+    destination=os.getenv("DLT_DESTINATION", "duckdb"),
     dataset_name="donkey_raw",
 )
 

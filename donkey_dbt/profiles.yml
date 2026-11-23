@@ -6,3 +6,13 @@ donkey_dbt:
       path: "{{ env_var('DUCKDB_PATH', '../donkey.duckdb') }}"
       schema: donkey_dbt
       threads: 1
+
+    prod:
+      type: bigquery
+      method: oauth
+      project: encoded-yen-515613-p2
+      dataset: donkey_dbt
+      location: EU
+      threads: 4
+      maximum_bytes_billed: 1000000000
+      job_execution_timeout_seconds: 300
