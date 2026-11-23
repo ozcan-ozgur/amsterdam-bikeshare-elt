@@ -1,0 +1,8 @@
+donkey_dbt:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('DUCKDB_PATH', '../donkey.duckdb') }}"
+      schema: donkey_dbt
+      threads: 1
