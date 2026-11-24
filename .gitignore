@@ -9,7 +9,6 @@ logs/
 gcp-key*.json
 .env
 .idea/
-scratch.py
 dlt_okuma_listesi.md
 donkey_dbt/.user.yml
 
