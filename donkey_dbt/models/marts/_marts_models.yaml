@@ -94,3 +94,26 @@ models:
         description: >
           Vehicles at stations missing from station_information (depot / non-public).
           Vehicles on the street ≈ total_vehicles - vehicles_at_unlisted_stations.
+
+unit_tests:
+  - name: test_incremental_only_new_snaphots
+    model: fct__station_availability
+    description: "In an incremental run, only snapshots newer than max(snapshot_at) in the existing table are processed."
+    overrides:
+      macros:
+        is_incremental: true
+    given:
+      - input: this
+        rows:
+          - { snapshot_at: '2026-01-01 10:00:00+00' }
+      - input: ref('stg__station_status')
+        rows:
+          - { station_id: '100', snapshot_at: '2026-01-01 10:00:00+00', num_vehicles_available: 5 }
+          - { station_id: '100', snapshot_at: '2026-01-01 11:00:00+00', num_vehicles_available: 7 }
+      - input: ref('stg__station_information')
+        rows:
+          - { station_id: '100', capacity: 10 }
+    expect:
+      rows:
+        - { station_id: '100', snapshot_at: '2026-01-01 11
+        :00:00+00' }
