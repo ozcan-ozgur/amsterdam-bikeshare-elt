@@ -1,6 +1,18 @@
+{{
+    config(
+        materialized = 'incremental',
+        unique_key = ['station_id', 'snapshot_at'],
+        on_schema_change = 'append_new_columns'
+    )
+}}
+
 with main_table as (
 
     select * from {{ref('stg__station_status') }}
+{% if is_incremental() %}
+
+    where snapshot_at > (select max(snapshot_at) from {{ this }})
+{% endif %}
 ),
 
 join_table as (
