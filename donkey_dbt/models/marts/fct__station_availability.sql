@@ -2,7 +2,9 @@
     config(
         materialized = 'incremental',
         unique_key = ['station_id', 'snapshot_at'],
-        on_schema_change = 'append_new_columns'
+        on_schema_change = 'append_new_columns',
+        partition_by = {'field': 'snapshot_at', 'data_type':'timestamp', 'granularity':'day'},
+        cluster_by = ['station_id']
     )
 }}
 
