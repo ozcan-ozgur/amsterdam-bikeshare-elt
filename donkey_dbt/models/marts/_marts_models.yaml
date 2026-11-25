@@ -115,5 +115,4 @@ unit_tests:
           - { station_id: '100', capacity: 10 }
     expect:
       rows:
-        - { station_id: '100', snapshot_at: '2026-01-01 11
-        :00:00+00' }
+        - { station_id: '100', snapshot_at: '2026-01-01 11:00:00+00' }
