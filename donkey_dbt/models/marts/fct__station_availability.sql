@@ -3,18 +3,18 @@
         materialized = 'incremental',
         unique_key = ['station_id', 'snapshot_at'],
         on_schema_change = 'append_new_columns',
-        partition_by = {'field': 'snapshot_at', 'data_type':'timestamp', 'granularity':'day'},
-        cluster_by = ['station_id']
+        partition_by = {'field': 'snapshot_at', 'data_type': 'timestamp', 'granularity': 'day'} if target.type == 'bigquery' else none,
+        cluster_by = ['station_id'] if target.type == 'bigquery' else none
     )
 }}
 
 with main_table as (
 
-    select * from {{ref('stg__station_status') }}
-{% if is_incremental() %}
+    select * from {{ ref('stg__station_status') }}
+    {% if is_incremental() %}
 
-    where snapshot_at > (select max(snapshot_at) from {{ this }})
-{% endif %}
+        where snapshot_at > (select max(snapshot_at) from {{ this }})
+    {% endif %}
 ),
 
 join_table as (
@@ -34,11 +34,8 @@ select
     j.capacity,
     j.latitude,
     j.longitude,
-    round(({{ dbt_utils.safe_divide('m.num_vehicles_available ', 'j.capacity') }} * 100),2) as occupancy_percentage,
-    case
-        when j.station_id is not null then true
-        else false
-    end as is_listed_station
+    round(({{ dbt_utils.safe_divide('m.num_vehicles_available ', 'j.capacity') }} * 100), 2) as occupancy_percentage,
+    coalesce(j.station_id is not null, false) as is_listed_station
 
 from main_table as m
 left join join_table as j
