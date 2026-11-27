@@ -40,4 +40,5 @@ RUN cd donkey_dbt && dbt deps
 # non-zero exit code marks the Cloud Run execution as failed (and retried).
 # dbt is run from donkey_dbt/ so profiles.yml and the relative DuckDB path
 # (../donkey.duckdb) resolve correctly.
-CMD ["sh", "-c", "python donkey_pipeline.py && cd donkey_dbt && dbt build"]
+# Unit tests test code, not data: they run in CI, not in production.
+CMD ["sh", "-c", "python donkey_pipeline.py && cd donkey_dbt && dbt build --exclude-resource-type unit_test"]

@@ -5,8 +5,13 @@ models:
   - name: fct__station_availability
     description: >
       One row = one snapshot of one station (same grain as stg__station_status).
-      Station attributes (name, capacity) come from station_information via LEFT JOIN;
-      unlisted stations are kept and flagged with is_listed_station = false.
+      Built incrementally: each run processes only snapshots newer than max(snapshot_at).
+      Station attributes (name, capacity, coordinates, is_listed_station) come from
+      station_information via LEFT JOIN and are as of snapshot time: they are not updated
+      when station_information changes. A --full-refresh rewrites all history with the
+      current station attributes. Snapshots built before the first incremental deploy
+      (27-11-2026) carry station attributes as of that date.
+      Unlisted stations are kept and flagged with is_listed_station = false.
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -18,7 +23,7 @@ models:
           - not_null
 
       - name: station_name
-        description: "Station name (nl). NULL for unlisted stations."
+        description: "Station name (nl). NULL for unlisted stations. As of snapshot time."
 
       - name: snapshot_at
         description: "Snapshot time (earliest fetched_at within the same dlt load)."
@@ -32,7 +37,7 @@ models:
         description: "Number of free spots where a vehicle can be returned."
 
       - name: capacity
-        description: "Total station capacity. NULL for unlisted stations."
+        description: "Total station capacity. NULL for unlisted stations. As of snapshot time."
 
       - name: occupancy_percentage
         description: >
@@ -52,20 +57,21 @@ models:
                 severity: warn
 
       - name: is_listed_station
-        description: "Is the station in the current station_information list? (37006 was removed -> false)"
+        description: "Was the station in station_information when this snapshot was built? (37006 was removed -> false)"
         data_tests:
           - not_null
 
       - name: latitude
-        description: "Latitude (for the Looker Studio map). NULL for unlisted stations."
+        description: "Latitude (for the Looker Studio map). NULL for unlisted stations. As of snapshot time."
 
       - name: longitude
-        description: "Longitude (for the Looker Studio map). NULL for unlisted stations."
+        description: "Longitude (for the Looker Studio map). NULL for unlisted stations. As of snapshot time."
 
   - name: fct__fleet_snapshot
     description: >
       One row = a summary of the whole fleet in one snapshot.
       Derived from stg__vehicle_status with group by snapshot_at.
+      Built incrementally by snapshot_at.
     columns:
       - name: snapshot_at
         description: "Snapshot time. Grain key."
@@ -85,12 +91,67 @@ models:
         description: "Vehicles that are neither disabled nor reserved."
 
       - name: disabled_vehicles
-        description: "Disabled vehicles. Currently always 0: Donkey may not publish disabled vehicles in the feed."
+        description: >
+          Disabled vehicles. Currently always 0: Donkey may not publish disabled vehicles in the feed.
+          NULL flags count as not disabled (covered by unit test test_fleet_snapshot_null_flags).
 
       - name: reserved_vehicles
-        description: "Reserved vehicles. Currently always 0."
+        description: >
+          Reserved vehicles. Currently always 0.
+          NULL flags count as not reserved (covered by unit test test_fleet_snapshot_null_flags).
 
       - name: vehicles_at_unlisted_stations
         description: >
           Vehicles at stations missing from station_information (depot / non-public).
           Vehicles on the street ≈ total_vehicles - vehicles_at_unlisted_stations.
+          Station list as of snapshot time.
+
+unit_tests:
+  - name: test_incremental_only_new_snaphots
+    model: fct__station_availability
+    description: "In an incremental run, only snapshots newer than max(snapshot_at) in the existing table are processed."
+    overrides:
+      macros:
+        is_incremental: true
+    given:
+      - input: this
+        rows:
+          - { snapshot_at: '2026-01-01 10:00:00+00' }
+      - input: ref('stg__station_status')
+        rows:
+          - { station_id: '100', snapshot_at: '2026-01-01 10:00:00+00', num_vehicles_available: 5 }
+          - { station_id: '100', snapshot_at: '2026-01-01 11:00:00+00', num_vehicles_available: 7 }
+      - input: ref('stg__station_information')
+        rows:
+          - { station_id: '100', capacity: 10 }
+    expect:
+      rows:
+        - { station_id: '100', snapshot_at: '2026-01-01 11:00:00+00' }
+
+  - name: test_fleet_snapshot_null_flags
+    model: fct__fleet_snapshot
+    description: >
+      NULL is_disabled / is_reserved flags are treated as false,
+      and vehicles at stations missing from station_information are counted as unlisted.
+      Real data has no NULL or true flags yet, so this logic is only covered here.
+    overrides:
+      macros:
+        # full (non-incremental) run, so no "this" input is needed
+        is_incremental: false
+    given:
+      - input: ref('stg__vehicle_status')
+        rows:
+          # both flags unknown -> available
+          - { snapshot_at: '2026-01-01 10:00:00+00', vehicle_id: 'v1', station_id: '100', is_disabled: null, is_reserved: null }
+          # disabled, reserved unknown -> not available
+          - { snapshot_at: '2026-01-01 10:00:00+00', vehicle_id: 'v2', station_id: '100', is_disabled: true, is_reserved: null }
+          # disabled unknown, reserved -> not available
+          - { snapshot_at: '2026-01-01 10:00:00+00', vehicle_id: 'v3', station_id: '100', is_disabled: null, is_reserved: true }
+          # normal vehicle at an unlisted station -> available, unlisted
+          - { snapshot_at: '2026-01-01 10:00:00+00', vehicle_id: 'v4', station_id: '999', is_disabled: false, is_reserved: false }
+      - input: ref('stg__station_information')
+        rows:
+          - { station_id: '100' }
+    expect:
+      rows:
+        - { snapshot_at: '2026-01-01 10:00:00+00', total_vehicles: 4, available_vehicles: 2, disabled_vehicles: 1, reserved_vehicles: 1, vehicles_at_unlisted_stations: 1 }

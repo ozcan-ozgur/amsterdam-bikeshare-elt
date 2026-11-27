@@ -31,30 +31,45 @@ flowchart LR
 ```
 
 1. **Cloud Scheduler** triggers the **Cloud Run Job** every hour.
-2. The job runs one Docker image: `python donkey_pipeline.py && dbt build`.
+2. The job runs one Docker image: `python donkey_pipeline.py && dbt build --exclude-resource-type unit_test`.
    If loading fails, dbt does not run. A failed run exits non-zero and Cloud
    Run retries it once.
 3. **dlt** reads five GBFS endpoints and appends them to the `donkey_raw`
    dataset. Each row gets a `fetched_at` timestamp.
-4. **dbt** builds staging views and mart tables in `donkey_dbt` and runs all
-   data tests. Column descriptions are written to BigQuery (`persist_docs`).
-5. **Looker Studio** reads the two mart tables.
+4. **dbt** builds staging views and incremental mart tables in `donkey_dbt` and
+   runs all data tests. Unit tests test code, not data, so they run in CI only.
+   Column descriptions are written to BigQuery (`persist_docs`).
+5. **Looker Studio** reads the two incremental mart tables.
 
 ## Data model
 
 | Layer | Model | Grain |
 |---|---|---|
 | staging (views) | `stg__station_status`, `stg__vehicle_status`, `stg__station_information`, `stg__vehicle_types`, `stg__system_pricing_plans`, `stg__system_pricing_plans__per_min_pricing` | one row per source record; snapshots get a `snapshot_at` per dlt load |
-| marts (tables) | `fct__station_availability` | one row per station per snapshot: vehicles, free docks, capacity, occupancy %, coordinates |
-| marts (tables) | `fct__fleet_snapshot` | one row per snapshot: total, available and depot vehicles for the whole fleet |
+| marts (incremental tables) | `fct__station_availability` | one row per station per snapshot: vehicles, free docks, capacity, occupancy %, coordinates |
+| marts (incremental tables) | `fct__fleet_snapshot` | one row per snapshot: total, available and depot vehicles for the whole fleet |
 
 `station_status` and `vehicle_status` are appended on every run, which builds
 the history. Reference endpoints (`station_information`, `vehicle_types`,
 `system_pricing_plans`) are replaced on every run.
 
-Data quality is checked with dbt tests (`not_null`, `unique`, and
+### Incremental marts
+
+- Each run processes only snapshots newer than the latest `snapshot_at` in the
+  mart. The grain is the `unique_key`, so re-processing a snapshot never creates
+  duplicates (`merge` on BigQuery, `delete+insert` on DuckDB).
+- Station attributes (name, capacity, coordinates, `is_listed_station`) are
+  frozen as of snapshot time. `station_information` is replaced on every load,
+  so the marts are the only place that keeps this history.
+- On BigQuery only, both marts are partitioned by day on `snapshot_at`, and
+  `fct__station_availability` is also clustered by `station_id`.
+- `dbt build --full-refresh` rebuilds the marts from the raw tables, but it
+  overwrites historical station attributes with the current ones.
+
+Data quality is checked with dbt data tests (`not_null`, `unique`, and
 `dbt_utils.unique_combination_of_columns` / `accepted_range`) on staging and
-mart models.
+mart models. Unit tests cover the incremental filter and the NULL handling of
+vehicle flags.
 
 ### Things the data taught me
 
@@ -64,7 +79,8 @@ mart models.
 - **Occupancy can exceed 100%:** vehicles can be parked above a station's
   capacity. A `warn`-severity test monitors this instead of failing the run.
 - **Disabled and reserved vehicles are always 0:** the feed does not seem to
-  publish them.
+  publish them. A unit test covers the NULL and true cases the feed has not
+  produced yet.
 - **All timestamps are UTC.**
 
 ## Run it locally
@@ -81,7 +97,11 @@ uv run python donkey_pipeline.py
 # Transform + test
 cd donkey_dbt
 uv run dbt deps
-uv run dbt build
+uv run dbt build --exclude-resource-type unit_test
+
+# Unit tests (after the build: the incremental unit test reads the
+# column types of the existing mart table)
+uv run dbt test --select test_type:unit
 ```
 
 Or run the same container that runs in production (against DuckDB inside the
@@ -95,7 +115,8 @@ docker run --rm donkey-elt
 ## CI
 
 `.github/workflows/ci.yml` runs on pushes to `main` and on pull requests: `ruff` lint,
-a real load from the GBFS API into DuckDB, and `dbt build` with all tests.
+a real load from the GBFS API into a fresh DuckDB, `dbt build` with all data
+tests, and then the dbt unit tests.
 
 ## Repository layout
 
@@ -115,7 +136,8 @@ a real load from the GBFS API into DuckDB, and `dbt build` with all tests.
 | [dlt](https://dlthub.com/) | REST API extraction and loading (`rest_api_source`) |
 | [dbt](https://www.getdbt.com/) (`dbt-bigquery`, `dbt-duckdb`) | transformations and data tests |
 | [dbt-utils](https://hub.getdbt.com/dbt-labs/dbt_utils/latest/) | `unique_combination_of_columns`, `accepted_range`, `safe_divide` |
-| [dbt-codegen](https://hub.getdbt.com/dbt-labs/codegen/latest/) | generating staging model skeletons |
+| [dbt-codegen](https://hub.getdbt.com/dbt-labs/codegen/latest/) | generating staging model and unit test skeletons |
+| [SQLFluff](https://sqlfluff.com/) + `sqlfluff-templater-dbt` | SQL linting (dbt templater, DuckDB dialect) |
 | [DuckDB](https://duckdb.org/) | local development warehouse |
 | [BigQuery](https://cloud.google.com/bigquery) | production warehouse |
 | [Docker](https://www.docker.com/) + Artifact Registry | the ELT image |

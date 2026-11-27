@@ -1,6 +1,19 @@
+{{
+    config(
+        materialized = 'incremental',
+        unique_key = 'snapshot_at',
+        on_schema_change = 'append_new_columns',
+        partition_by = {'field': 'snapshot_at', 'data_type':'timestamp', 'granularity':'day'} if target.type == 'bigquery' else none
+    )
+}}
+
 with vehicles as (
 
     select * from {{ ref('stg__vehicle_status') }}
+    {% if is_incremental() %}
+
+        where snapshot_at > (select max(snapshot_at) from {{ this }})
+    {% endif %}
 ),
 
 stations as (
