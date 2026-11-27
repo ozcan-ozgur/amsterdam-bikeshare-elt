@@ -31,14 +31,14 @@ flowchart LR
 ```
 
 1. **Cloud Scheduler** triggers the **Cloud Run Job** every hour.
-2. The job runs one Docker image: `python donkey_pipeline.py && dbt build`.
+2. The job runs one Docker image: `python donkey_pipeline.py && dbt build --exclude-resource-type unit_test`.
    If loading fails, dbt does not run. A failed run exits non-zero and Cloud
    Run retries it once.
 3. **dlt** reads five GBFS endpoints and appends them to the `donkey_raw`
    dataset. Each row gets a `fetched_at` timestamp.
 4. **dbt** builds staging views and incremental mart tables in `donkey_dbt` and
-   runs all unit and data tests. Column descriptions are written to BigQuery
-   (`persist_docs`).
+   runs all data tests. Unit tests test code, not data, so they run in CI only.
+   Column descriptions are written to BigQuery (`persist_docs`).
 5. **Looker Studio** reads the two incremental mart tables.
 
 ## Data model
@@ -97,7 +97,11 @@ uv run python donkey_pipeline.py
 # Transform + test
 cd donkey_dbt
 uv run dbt deps
-uv run dbt build
+uv run dbt build --exclude-resource-type unit_test
+
+# Unit tests (after the build: the incremental unit test reads the
+# column types of the existing mart table)
+uv run dbt test --select test_type:unit
 ```
 
 Or run the same container that runs in production (against DuckDB inside the
@@ -111,7 +115,8 @@ docker run --rm donkey-elt
 ## CI
 
 `.github/workflows/ci.yml` runs on pushes to `main` and on pull requests: `ruff` lint,
-a real load from the GBFS API into DuckDB, and `dbt build` with all tests.
+a real load from the GBFS API into a fresh DuckDB, `dbt build` with all data
+tests, and then the dbt unit tests.
 
 ## Repository layout
 
