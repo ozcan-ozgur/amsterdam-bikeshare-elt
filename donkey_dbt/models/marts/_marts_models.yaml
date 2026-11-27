@@ -5,8 +5,13 @@ models:
   - name: fct__station_availability
     description: >
       One row = one snapshot of one station (same grain as stg__station_status).
-      Station attributes (name, capacity) come from station_information via LEFT JOIN;
-      unlisted stations are kept and flagged with is_listed_station = false.
+      Built incrementally: each run processes only snapshots newer than max(snapshot_at).
+      Station attributes (name, capacity, coordinates, is_listed_station) come from
+      station_information via LEFT JOIN and are as of snapshot time: they are not updated
+      when station_information changes. A --full-refresh rewrites all history with the
+      current station attributes. Snapshots built before the first incremental deploy
+      (<deploy date>) carry station attributes as of that date.
+      Unlisted stations are kept and flagged with is_listed_station = false.
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -18,7 +23,7 @@ models:
           - not_null
 
       - name: station_name
-        description: "Station name (nl). NULL for unlisted stations."
+        description: "Station name (nl). NULL for unlisted stations. As of snapshot time."
 
       - name: snapshot_at
         description: "Snapshot time (earliest fetched_at within the same dlt load)."
@@ -32,7 +37,7 @@ models:
         description: "Number of free spots where a vehicle can be returned."
 
       - name: capacity
-        description: "Total station capacity. NULL for unlisted stations."
+        description: "Total station capacity. NULL for unlisted stations. As of snapshot time."
 
       - name: occupancy_percentage
         description: >
@@ -52,20 +57,21 @@ models:
                 severity: warn
 
       - name: is_listed_station
-        description: "Is the station in the current station_information list? (37006 was removed -> false)"
+        description: "Was the station in station_information when this snapshot was built? (37006 was removed -> false)"
         data_tests:
           - not_null
 
       - name: latitude
-        description: "Latitude (for the Looker Studio map). NULL for unlisted stations."
+        description: "Latitude (for the Looker Studio map). NULL for unlisted stations. As of snapshot time."
 
       - name: longitude
-        description: "Longitude (for the Looker Studio map). NULL for unlisted stations."
+        description: "Longitude (for the Looker Studio map). NULL for unlisted stations. As of snapshot time."
 
   - name: fct__fleet_snapshot
     description: >
       One row = a summary of the whole fleet in one snapshot.
       Derived from stg__vehicle_status with group by snapshot_at.
+      Built incrementally by snapshot_at.
     columns:
       - name: snapshot_at
         description: "Snapshot time. Grain key."
@@ -85,15 +91,20 @@ models:
         description: "Vehicles that are neither disabled nor reserved."
 
       - name: disabled_vehicles
-        description: "Disabled vehicles. Currently always 0: Donkey may not publish disabled vehicles in the feed."
+        description: >
+          Disabled vehicles. Currently always 0: Donkey may not publish disabled vehicles in the feed.
+          NULL flags count as not disabled (covered by unit test test_fleet_snapshot_null_flags).
 
       - name: reserved_vehicles
-        description: "Reserved vehicles. Currently always 0."
+        description: >
+          Reserved vehicles. Currently always 0.
+          NULL flags count as not reserved (covered by unit test test_fleet_snapshot_null_flags).
 
       - name: vehicles_at_unlisted_stations
         description: >
           Vehicles at stations missing from station_information (depot / non-public).
           Vehicles on the street ≈ total_vehicles - vehicles_at_unlisted_stations.
+          Station list as of snapshot time.
 
 unit_tests:
   - name: test_incremental_only_new_snaphots
