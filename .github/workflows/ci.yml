@@ -21,5 +21,9 @@ jobs:
       - run: uv run python donkey_pipeline.py
       - run: uv run dbt deps
         working-directory: donkey_dbt
-      - run: uv run dbt build
+      # Unit tests that use the "this" input need the model's table to exist.
+      # CI starts with an empty DuckDB, so build first, then run unit tests.
+      - run: uv run dbt build --exclude-resource-type unit_test
+        working-directory: donkey_dbt
+      - run: uv run dbt test --select test_type:unit
         working-directory: donkey_dbt
