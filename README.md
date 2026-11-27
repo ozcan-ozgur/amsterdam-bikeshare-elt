@@ -10,6 +10,8 @@ exactly that.
 
 **Dashboard:** [Looker Studio report](https://lookerstudio.google.com/reporting/43279d71-9c44-49ec-a209-692398859cbb)
 
+**dbt docs:** [models, column descriptions and lineage graph](https://ozcan-ozgur.github.io/amsterdam-bikeshare-elt/)
+
 | Station Availability | Fleet Overview |
 |---|---|
 | ![Station Availability](docs/images/station-availability.png) | ![Fleet Overview](docs/images/fleet-overview.png) |
