@@ -10,7 +10,7 @@ models:
       station_information via LEFT JOIN and are as of snapshot time: they are not updated
       when station_information changes. A --full-refresh rewrites all history with the
       current station attributes. Snapshots built before the first incremental deploy
-      (<deploy date>) carry station attributes as of that date.
+      (27-11-2026) carry station attributes as of that date.
       Unlisted stations are kept and flagged with is_listed_station = false.
     data_tests:
       - dbt_utils.unique_combination_of_columns:
